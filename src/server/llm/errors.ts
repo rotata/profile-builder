@@ -16,6 +16,13 @@ export function toApiError(error: unknown): ApiError {
         message: "The LLM provider rejected the API key. Check OPENAI_API_KEY in .env.local.",
       };
     }
+    // OpenAI signals "out of credits" as a 429 too; unlike a rate limit, retrying can't fix it.
+    if (status === 429 && /insufficient_quota|no credits|exceeded your current quota|billing/i.test(`${cause.responseBody ?? ""} ${cause.message}`)) {
+      return {
+        code: "llm_quota_exceeded",
+        message: "The LLM provider account has no credits or quota left. Add credits, or switch provider/model in .env.local.",
+      };
+    }
     if (status === 404) {
       return {
         code: "llm_not_configured",

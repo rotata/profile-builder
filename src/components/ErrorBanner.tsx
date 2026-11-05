@@ -3,6 +3,7 @@ import type { ApiError } from "@/shared/contract";
 const TITLES: Record<ApiError["code"], string> = {
   llm_not_configured: "The assistant isn't set up yet",
   llm_auth_failed: "The API key was rejected",
+  llm_quota_exceeded: "The LLM account is out of credits",
   llm_unavailable: "The assistant is temporarily unavailable",
   invalid_request: "That message couldn't be sent",
   not_found: "Not found",

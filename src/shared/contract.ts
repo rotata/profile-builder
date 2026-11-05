@@ -213,6 +213,7 @@ export type AppUIMessage = UIMessage<never, AppDataParts>;
 export const API_ERROR_CODES = [
   "llm_not_configured", // no API key / bad env → fix setup
   "llm_auth_failed", // provider rejected the key
+  "llm_quota_exceeded", // account out of credits/quota → billing, retrying won't help
   "llm_unavailable", // rate limit, timeout, provider outage → retry later
   "invalid_request", // client sent something invalid
   "not_found",

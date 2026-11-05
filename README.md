@@ -61,6 +61,7 @@ change in one file (`src/server/llm/provider.ts`).
 | Key missing / bad env | Chat returns `503 llm_not_configured`; banner names the env var. History and profile still load. |
 | Key rejected (401/403) | `llm_auth_failed` banner: "The API key was rejected" |
 | Model not found (404) | `llm_not_configured`: check `LLM_MODEL` |
+| Account out of credits (OpenAI 429 `insufficient_quota`) | `llm_quota_exceeded`: "add credits or switch provider". Kept separate from rate limits because retrying can't fix it |
 | Rate limit / 5xx / network | SDK retries (2×), then `llm_unavailable` with **Try again**. A turn that failed before any text is not saved, so retrying can't duplicate history |
 | Stream dies mid-reply | Partial reply kept, marked `interrupted`; extraction skipped for that turn |
 | Extraction fails / returns junk | Reply stands; profile untouched; small "couldn't update your profile" notice |
