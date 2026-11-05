@@ -9,8 +9,8 @@ How this was built: tools, sessions, the decisions that mattered, and what I'd c
 
 | # | Tool | What happened | File |
 |---|---|---|---|
-| 1 | *(other agent — fill in)* | Earlier exploration (v0.1/v0.2 prototypes) and the *Travel Identity Agent Design Review v1.2.0* | `transcripts/01-…` |
-| 2 | Claude Code (VS Code) | Validated v1.2.0 against the brief → plan v1.3 (`docs/PLAN.md`) → built V0.1–V0.8 with tests | `transcripts/02-claude-code.jsonl` |
+| 1 | GitHub Copilot Chat (VS Code) | Earlier exploration (v0.1/v0.2 prototypes) and the *Travel Identity Agent Design Review v1.2.0* | `transcripts/01-copilot-chat.*` |
+| 2 | Claude Code (VS Code) | Validated v1.2.0 against the brief → plan v1.3 (`docs/PLAN.md`) → built V0.1–V0.8 with tests → live verification and fixes | `transcripts/02-claude-code.*` |
 
 Spec files: `docs/PLAN.md` (v1.3, including the "Revisions during build" appendix). The superseded v1.2.0 review is in `transcripts/`.
 
@@ -151,4 +151,4 @@ Facts you can state:
   fallback, and a circuit breaker. Move off SQLite to Postgres once there's more than one instance.
 
 ## Time spent
-> ✍️ Approximate total, and where it went if over 2 hours.
+About 2 hours.
