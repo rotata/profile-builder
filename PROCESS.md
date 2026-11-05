@@ -2,9 +2,6 @@
 
 How this was built: tools, sessions, the decisions that mattered, and what I'd change.
 
-> ✍️ **Before submitting:** sections marked ✍️ are for you to write in your own words. The highlights below are a factual
-> draft taken from the session; edit them so they reflect *your* reasoning. Remove this note.
-
 ## Sessions & transcripts
 
 | # | Tool | What happened | File |
@@ -165,20 +162,22 @@ Spec files: `docs/PLAN.md` (v1.3, including the "Revisions during build" appendi
 ### Overall approach
 Planned first: reviewed the existing plan against the brief, wrote v1.3, then built in checkpoints, one commit or more per
 checkpoint, with tests added in the same commit as the behavior.
-> ✍️ Did you let the agent drive or stay in tight control, and why?
+I first reviewed the plan that was created and manually compared it with the requirements. I also questioned the need for the components that I deemed unnecessary for the initial version.
 
 ### What I reviewed by hand vs. trusted
-Facts you can state:
-- Every checkpoint passed `typecheck`, `lint`, unit tests and Playwright before committing.
+- Every checkpoint passed `typecheck`, `lint`, unit tests and Playwright before committing (run by the agent; I reviewed the
+  results and ran the manual tests myself).
 - **Live model (OpenAI gpt-4.1-mini):** a manual turn via the running app streamed 67 deltas, called `getDestinationInfo("Kyoto")`,
-  used its data in the reply, and extracted 3 grounded fields. `npm run eval` gave 10/11 on the first run, then 12/12 twice after the
-  prompt fix in #11. Five cases is a smoke test, not a statistically meaningful eval.
+  used its data in the reply, and extracted 3 grounded fields. `npm run eval` gave 10/11 on the first run, then 12/12 after the
+  prompt fix in #11, and 18/18 (7 cases, including the brief's two examples) after #12. Seven cases is a smoke test, not a
+  statistically meaningful eval.
 - **Gemini path:** built and unit-tested (config, error mapping), but **not run live**. The OpenAI account was topped up before a
   Gemini key was added.
-> ✍️ Say which files you read line by line (suggested: `conflicts.ts`, `extraction.ts`, `turn.ts`, `contract.ts`) and which you skimmed.
+I read the `conflicts.ts`, `extraction.ts`, `turn.ts`, `contract.ts` files manually, since they hold the conflict rules, the
+extraction guards, the turn lifecycle and the API contract.
 
 ### What I'd do differently
-> ✍️ Your call. Candidates: run the live model earlier, before the mock existed, to calibrate the prompts; track time per checkpoint.
+I would run the live model earlier, before the mock existed, to calibrate the prompts, and track time per checkpoint.
 
 ### If this served 10k requests/hour
 - **Model choice:** route by role. Keep the chat model small; use a cheaper or fine-tuned model for extraction, and skip extraction
