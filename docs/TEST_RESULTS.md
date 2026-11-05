@@ -36,7 +36,7 @@ eval is local-only because it needs an API key.
 | Conflict detection, no silent overwrite | ✅ a case per rule (implicit/explicit, cross-field, frozen field, dedupe, chat resolution) | ✅ card shown, profile kept, Keep/Replace, resolve via chat, survives reload | ✅ steakhouse vs vegetarian |
 | User changes their mind | ✅ | ✅ | ✅ |
 | Missing/invalid key, quota, rate limits | ✅ OpenAI + Gemini error formats | ✅ provider failure → "Try again"; failed turn not saved | – |
-| Runs from a clean clone | – | – | ⚠️ fresh clone: `npm ci` + typecheck + unit in 35s; E2E not run on the clone |
+| Runs from a clean clone | – | ✅ GitHub Actions on a fresh Ubuntu checkout: `npm ci` → typecheck → lint → unit → E2E, green in ~2 min | – |
 
 ## Unit tests — 55 passed
 
