@@ -1,7 +1,8 @@
 # Test results
 
-Results for commit `b925a42`, run locally on 2026-11-04 (Windows 11, Node 26.13.0). CI runs the same unit and E2E suites on
-Node 24; the live eval is local-only because it needs an API key.
+Results run locally on 2026-11-04 (Windows 11, Node 26.13.0), updated after the prompt fixes described in
+[Requirement walkthrough](#requirement-walkthrough-live-model). CI runs the same unit and E2E suites on Node 24; the live
+eval is local-only because it needs an API key.
 
 ## Summary
 
@@ -11,7 +12,7 @@ Node 24; the live eval is local-only because it needs an API key.
 | Lint | `npm run lint` | – | ✅ clean |
 | Unit (Vitest) | `npm test` | none / scripted | ✅ **55 / 55** passed in 0.6s |
 | End-to-end (Playwright, Chromium, production build) | `npm run test:e2e` | scripted mock | ✅ **12 / 12** passed in 45s |
-| Live eval | `npm run eval` | OpenAI `gpt-4.1-mini` | ✅ **12 / 12** checks, 5 conversations |
+| Live eval | `npm run eval` | OpenAI `gpt-4.1-mini` | ✅ **18 / 18** checks, 7 conversations |
 
 **What each layer proves:**
 - **Unit tests** cover the pure logic: conflict rules, extraction guards, destination lookup, error mapping, config, persistence, and
@@ -66,20 +67,41 @@ Node 24; the live eval is local-only because it needs an API key.
 | profile | an explicit change of mind updates the profile directly | 4.5s |
 | shell | renders the chat and the profile panel side by side | 0.4s |
 
-## Live eval — 12 / 12 checks (OpenAI gpt-4.1-mini)
+## Live eval — 18 / 18 checks (OpenAI gpt-4.1-mini)
 
 | Case | Checks | Time |
 |---|---|---|
-| Implicit contradiction becomes a conflict | dietary still vegetarian ✅ · open conflict on dietary ✅ | 6.2s |
-| Explicit change of mind is applied, not flagged | vegetarian removed ✅ · no open conflicts ✅ | 5.1s |
-| Budget tier inferred from behavior | budgetTier = budget ✅ · street food not filed as dietary ✅ | 2.6s |
-| Known destination: tool called and data used | Kyoto found ✅ · reply uses a tool fact ✅ · Kyoto saved ✅ | 3.3s |
-| Unknown destination: no invented facts | lookup called, not found ✅ · no prices ✅ · admits missing data ✅ | 2.5s |
+| Implicit contradiction becomes a conflict | dietary still vegetarian ✅ · open conflict on dietary ✅ | 6.1s |
+| Explicit change of mind is applied, not flagged | vegetarian removed ✅ · no open conflicts ✅ | 4.2s |
+| Budget tier inferred from behavior | budgetTier = budget ✅ · street food not filed as dietary ✅ | 2.1s |
+| **Brief example:** boutique hotels, spends more on food | boutique hotels in accommodation ✅ · food in interests ✅ · nothing in dietary ✅ | 2.4s |
+| **Brief example:** vegetarian → "I plan my trips around steakhouses" → "Sounds good." | vegetarian kept ✅ · conflict still open after a vague reply ✅ · assistant asks about the contradiction ✅ | 6.7s |
+| Known destination: tool called and data used | Kyoto found ✅ · reply uses a tool fact ✅ · Kyoto saved ✅ | 3.4s |
+| Unknown destination: no invented facts | lookup called, not found ✅ · no prices ✅ · admits missing data ✅ | 3.0s |
 
 **Run history:**
 1. First live run: **10/11**. Budget wasn't inferred from "hostels… to keep costs down", and "street food" was filed under
    `dietary`. Root cause: the extraction prompt was too literal. See PROCESS.md #11.
-2. After the prompt fix: **12/12** on three consecutive runs (one more check was added for the dietary mix-up).
+2. After that fix: **12/12** on three consecutive runs.
+3. Walking through the brief's exact examples by hand found three more problems (see below). After fixing them and adding
+   both examples as eval cases: **18/18**.
+
+## Requirement walkthrough (live model)
+
+Each requirement's example was run by hand against the running app on gpt-4.1-mini.
+
+| # | Requirement | Before the fix | After the fix |
+|---|---|---|---|
+| 1 | Streaming conversation | ✅ replies arrive as 56–67 incremental chunks | ✅ |
+| 2 | "I usually stay in boutique hotels and spend more money on food than accommodation." | ⚠️ only `accommodation: boutique hotels`; the food priority was lost | ✅ `accommodation: boutique hotels`, `interests: food` |
+| 3 | Persistence across reload | ✅ (E2E) | ✅ |
+| 4 | Visible read-only profile | ✅ (E2E) | ✅ |
+| 5 | Typed contracts: browser ↔ API ↔ model ↔ persistence | ✅ zod schemas in `shared/contract.ts` (API), `ExtractionResultSchema` (model output), validated reads in `db.ts` | ✅ |
+| 6 | Destination tool influences the next question | ✅ "Marrakech… souks, riads… do you enjoy staying in traditional riads?" | ✅ |
+| 7 | "I'm vegetarian." → "I plan my trips around steakhouses." | ⚠️ conflict recorded and profile kept, but the reply explained it away ("even if you won't eat the steak"), and the next turn didn't raise it | ✅ turn 2: *"you identify as vegetarian but plan trips around steakhouses… is vegetarian your strict diet, or are you flexible?"* |
+| 7b | Vague "Sounds good." while a conflict is open | ⚠️ was recorded as `travelPace: relaxed` (answering an either/or question) | ✅ nothing extracted; conflict stays open; assistant re-asks |
+| 7c | Real answer: "the steakhouses are for my partner — I'm still vegetarian" | – | ✅ conflict resolved as *keep*; vegetarian stays |
+| 8 | README + PROCESS | ✅ README; PROCESS.md drafted (the author's reflection sections are still to be written) | – |
 
 Against the scripted mock (`LLM_PROVIDER=mock npm run eval`), the harness scores 9/11 by design. The mock's keyword rules lack the
 judgment the two inference cases test.
@@ -95,7 +117,7 @@ judgment the two inference cases test.
 | Destination tool throws → treated as "not found" | Low | Unit test on the tool adapter with a throwing lookup |
 | `POST /api/conflicts/:id/resolve` boundaries (invalid body 400, unknown/resolved id 404) | Low | Route unit tests, like `chat-route.test.ts` |
 | Corrupt profile row → empty profile | Low | Unit test, like the corrupt-message test |
-| Real-model conflict judgment beyond steakhouse vs vegetarian: resolving via chat, the assistant raising the conflict next turn, scalar conflict (luxury → "hostels only"), likes vs dislikes | Medium | 3–4 more eval cases |
+| Real-model conflict judgment beyond the dietary example: scalar conflict (luxury → "hostels only"), likes vs dislikes; chat resolution is verified by hand only | Medium | 2–3 more eval cases |
 | Streaming against the real model, automated | Low | Eval check that a reply arrives as several text chunks |
 | JSON logs, "Updating…" indicator | Low | Checked by eye only |
 | Gemini provider against the live API | Medium | Same eval with `LLM_PROVIDER=google` and a key |

@@ -26,22 +26,25 @@ function describeConflict(c: Conflict): string {
 
 export function buildChatInstructions(profile: TravelProfile, openConflicts: Conflict[]): string {
   const known = compactProfile(profile);
+  // Placed first: when present, resolving it outranks everything else in the reply.
   const conflictSection = openConflicts.length
     ? [
-        "",
-        "OPEN CONFLICTS — the traveler said things that contradict their saved profile. The profile was NOT changed.",
-        "Before anything else, ask about the first one in one friendly sentence (e.g. \"Earlier you said you're vegetarian — has that changed, or is the steakhouse for someone else?\"). Don't assume either answer.",
+        "TOP PRIORITY — OPEN CONFLICTS. The traveler said things that contradict their saved profile; the profile was NOT changed:",
         ...openConflicts.map(describeConflict),
+        "Your reply's one question MUST be about the first conflict: name both sides plainly and ask which is true (e.g. \"Earlier you said you're vegetarian — has that changed, or are the steakhouses for someone else?\"). Do not explain it away, assume an answer, or move on to other topics until it's answered.",
+        "",
       ]
     : [];
   return [
+    ...conflictSection,
     "You are Profile Builder, a friendly travel concierge whose job is to learn the traveler's durable travel preferences through conversation.",
     "",
     "How to talk:",
     "- Interview, don't lecture. End every reply with exactly ONE question (never two, never \"also…?\"), aimed at the most useful thing you don't know yet.",
     "- Briefly reflect back what you just learned so the traveler can correct you.",
     "- Keep replies under 90 words. No bullet lists unless asked.",
-    "- Never invent preferences the traveler didn't state.",
+    "- Never invent preferences the traveler didn't state. If they answer an either/or question vaguely (\"sounds good\"), don't pick an option for them — ask again.",
+    "- If something the traveler says seems to contradict what you already know about them, don't explain it away or guess — point out both and ask which is true.",
     "",
     "Destinations:",
     "- Whenever the traveler mentions a specific destination, call getDestinationInfo for it BEFORE replying. It is your only source of destination facts.",
@@ -62,6 +65,8 @@ export function buildExtractionInstructions(): string {
     "",
     "Rules:",
     "- Only extract what the traveler states, or clearly confirms when answering the assistant's question (\"yes\" to \"are you vegetarian?\" counts).",
+    "- A bare acknowledgement (\"yes\", \"sure\", \"sounds good\") only confirms a yes/no question. In reply to an either/or question (\"relaxed or packed?\") it selects nothing — extract nothing from it.",
+    "- Spending priorities reveal interests: \"I spend more on food than accommodation\" → interests \"food\"; \"I splurge on experiences\" → interests \"experiences\".",
     "- Exception — clear behavioral signals for the enum fields: when the traveler's own words unambiguously imply a budgetTier, travelPace or companions value, extract it with those words as evidence (\"we always stay in hostels to keep costs down\" → budgetTier budget; \"five-star only\" → luxury; \"we cram in as much as possible\" → packed). If it's a judgment call, leave it out.",
     "- dietary is ONLY for restrictions or requirements (vegetarian, vegan, halal, kosher, gluten-free, allergies). Food enthusiasms (street food, wine, fine dining) go in interests.",
     "- `evidence` must be a verbatim quote from the TRAVELER's message, never from the assistant.",
@@ -72,7 +77,7 @@ export function buildExtractionInstructions(): string {
     "- Ignore one-off trip logistics (specific dates, a single booking) unless stated as a general preference.",
     "- explicitChange = true ONLY when the traveler explicitly says an earlier preference changed or was wrong (\"actually\", \"not anymore\", \"I changed my mind\", \"I eat meat now\").",
     "- Contradictions: if the message IMPLIES something incompatible with a value already in the current profile, without explicitly changing it (e.g. profile has dietary \"vegetarian\" and the traveler asks for the best steakhouse), add a `contradictions` entry instead of an update. Use the existing value exactly as shown. candidateValue is what the field would become, or \"\" if the old value would simply be removed.",
-    "- Resolutions: <open_conflicts> lists contradictions the assistant asked about. If the traveler's message answers one, add a `resolutions` entry with its id: \"keep\" if the saved profile value still stands (e.g. \"the steakhouse is for my friend\"), \"replace\" if the new value wins (e.g. \"yes, I eat meat now\"). Otherwise leave it out.",
+    "- Resolutions: <open_conflicts> lists contradictions the assistant asked about. If the traveler's message answers one, add a `resolutions` entry with its id: \"keep\" if the saved profile value still stands (e.g. \"the steakhouse is for my friend\"), \"replace\" if the new value wins (e.g. \"yes, I eat meat now\"). Only when the message actually addresses that conflict — vague acknowledgements (\"sounds good\", \"ok\") never resolve one. Otherwise leave it out.",
     "- If nothing durable was said, return empty arrays. Do not guess.",
   ].join("\n");
 }

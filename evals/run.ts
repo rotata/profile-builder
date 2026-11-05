@@ -55,6 +55,24 @@ const CASES: Case[] = [
     ],
   },
   {
+    name: "brief example: boutique hotels, spends more on food",
+    turns: ["I usually stay in boutique hotels and spend more money on food than accommodation."],
+    checks: (o) => [
+      ["accommodation has boutique hotels", values(o.profile, "accommodation").some((v) => v.includes("boutique"))],
+      ["interests include food", values(o.profile, "interests").some((v) => v.includes("food"))],
+      ["nothing filed as dietary", values(o.profile, "dietary").length === 0],
+    ],
+  },
+  {
+    name: "brief example: vegetarian, then trips around steakhouses",
+    turns: ["I'm vegetarian.", "I plan my trips around steakhouses.", "Sounds good."],
+    checks: (o) => [
+      ["dietary still has vegetarian", values(o.profile, "dietary").includes("vegetarian")],
+      ["conflict still open after a vague 'sounds good'", o.conflicts.some((c) => c.existingField === "dietary")],
+      ["assistant raises the contradiction (turn 2 or 3)", o.replies.slice(1).some((r) => /vegetarian/i.test(r.text) && /\?/.test(r.text))],
+    ],
+  },
+  {
     name: "known destination: tool called and its data used",
     turns: ["I'm dreaming about a trip to Kyoto."],
     checks: (o) => [

@@ -100,7 +100,20 @@ Spec files: `docs/PLAN.md` (v1.3, including the "Revisions during build" appendi
   one question" after the live reply asked two.
 - **Result:** 12/12 on two consecutive runs (gpt-4.1-mini).
 
-### 12. Tooling slip
+### 12. "Can we confirm these requirements are met?" — checking the brief's exact examples
+- **Trying to:** confirm each requirement with the brief's own sentences, rather than trusting similar test cases.
+- **Got back:** three real problems with the live model, though every automated test passed:
+  1. "spend more money on food than accommodation" produced no `food` interest.
+  2. The assistant explained away "vegetarian" vs "I plan my trips around steakhouses" instead of asking, and then didn't
+     raise the open conflict.
+  3. "Sounds good" in reply to "relaxed or packed?" was recorded as `travelPace: relaxed`.
+- **Changed:** the open conflict now goes first in the chat prompt, and the reply's question must be about it. Vague
+  acknowledgements no longer answer either/or questions or resolve conflicts. Spending priorities count as interests. Both of
+  the brief's examples became eval cases (18/18), and the replies were read by hand, not just regex-checked.
+- **Lesson:** the conflict *detection* was solid. The *conversation* around it was where the real model drifted, and the eval
+  wasn't testing that until now.
+
+### 13. Tooling slip
 - A PowerShell one-liner used to edit a test file re-encoded it (an em dash became `â€”`, and a BOM was added). Caught in the diff
   notice; rewrote the file and stopped using shell commands for file edits.
 
