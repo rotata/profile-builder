@@ -83,7 +83,24 @@ Spec files: `docs/PLAN.md` (v1.3, including the "Revisions during build" appendi
 - **Kept:** the failures. That gap is the point: E2E proves wiring with a scripted model, the eval measures judgment. Making
   the mock smarter would only blur the two.
 
-### 10. Tooling slip
+### 10. First live run: the error message was wrong
+- **What happened:** the first real OpenAI call failed with "You have no credits remaining" (a 429). The app said "busy, try
+  again", because every 429 was mapped to "transient".
+- **Changed:** added `llm_quota_exceeded` for credit and daily-quota exhaustion, kept separate from rate limits. Also added Gemini
+  as a provider with a free tier, and handled its quirks: an invalid key is a 400, and per-minute free-tier limits also say
+  "quota". Unit tests use real-shaped error bodies.
+
+### 11. The live eval caught a prompt that was too literal
+- **What happened:** 10/11 on the first live run. For *"We always stay in hostels and live on street food to keep costs down"*
+  the chat model even *said* "you lean towards budget travel", but extraction set no `budgetTier`. Inspecting the raw output
+  showed nothing was dropped by the guards: the model never proposed it, because the prompt said "only extract what the traveler
+  states". It also filed "street food" under `dietary`.
+- **Changed:** one prompt exception for unambiguous behavioral signals on enum fields (evidence still required, so the grounding
+  guard still applies). `dietary` is defined as restrictions only. Added an eval check for the dietary mix-up. Also tightened "exactly
+  one question" after the live reply asked two.
+- **Result:** 12/12 on two consecutive runs (gpt-4.1-mini).
+
+### 12. Tooling slip
 - A PowerShell one-liner used to edit a test file re-encoded it (an em dash became `â€”`, and a BOM was added). Caught in the diff
   notice; rewrote the file and stopped using shell commands for file edits.
 
@@ -97,10 +114,12 @@ checkpoint, with tests added in the same commit as the behavior.
 ### What I reviewed by hand vs. trusted
 Facts you can state:
 - Every checkpoint passed `typecheck`, `lint`, unit tests and Playwright before committing.
-- **Not verified against the live OpenAI API in this session** (no key was configured). The OpenAI path is built from the
-  AI SDK 7 docs and type definitions bundled in `node_modules`, and only exercised via the mock.
-> ✍️ Run `npm run eval` with your key and paste the results here. Then say which files you read line by line (suggested:
-> `conflicts.ts`, `extraction.ts`, `turn.ts`, `contract.ts`) and which you skimmed.
+- **Live model (OpenAI gpt-4.1-mini):** a manual turn via the running app streamed 67 deltas, called `getDestinationInfo("Kyoto")`,
+  used its data in the reply, and extracted 3 grounded fields. `npm run eval` gave 10/11 on the first run, then 12/12 twice after the
+  prompt fix in #11. Five cases is a smoke test, not a statistically meaningful eval.
+- **Gemini path:** built and unit-tested (config, error mapping), but **not run live**. The OpenAI account was topped up before a
+  Gemini key was added.
+> ✍️ Say which files you read line by line (suggested: `conflicts.ts`, `extraction.ts`, `turn.ts`, `contract.ts`) and which you skimmed.
 
 ### What I'd do differently
 > ✍️ Your call. Candidates: run the live model earlier, before the mock existed, to calibrate the prompts; track time per checkpoint.

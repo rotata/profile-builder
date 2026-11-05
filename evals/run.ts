@@ -49,7 +49,10 @@ const CASES: Case[] = [
   {
     name: "budget tier inferred from behavior",
     turns: ["We always stay in hostels and live on street food to keep costs down."],
-    checks: (o) => [["budgetTier = budget", values(o.profile, "budgetTier").includes("budget")]],
+    checks: (o) => [
+      ["budgetTier = budget", values(o.profile, "budgetTier").includes("budget")],
+      ["street food is an interest, not a dietary restriction", !values(o.profile, "dietary").some((v) => v.includes("street food"))],
+    ],
   },
   {
     name: "known destination: tool called and its data used",

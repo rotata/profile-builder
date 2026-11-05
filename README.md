@@ -159,8 +159,9 @@ The client sends only the new message. **History is server-owned**, so the clien
 
 ## Known gaps
 
-- **Live-model verification.** Built against the AI SDK 7 docs and type definitions, and exercised via the mock. Run
-  `npm run eval` with a key to measure the real model; results go in PROCESS.md.
+- **Eval depth.** The live eval passes 12/12 on gpt-4.1-mini (two runs), but 5 conversations is a smoke test. The Gemini
+  path is unit-tested and wired up, but hasn't been run against the live API.
+- The chat model only gets one instruction to call the tool for every destination. Nothing app-side forces a call when it's skipped.
 - A conflict the traveler "kept" can be raised again by a later, similar message. There's no memory of dismissed
   contradictions yet.
 - The profile only updates at the end of each turn, not live during streaming.
