@@ -10,7 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "eval": "tsx evals/run.ts"
+    "eval": "tsx --env-file-if-exists=.env.local evals/run.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "4.0.109",
