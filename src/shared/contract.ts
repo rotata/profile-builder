@@ -17,6 +17,27 @@ export const ChatRequestSchema = z.object({
 });
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
+/** A persisted chat message, as returned by GET /api/state. */
+export const ChatMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(["user", "assistant"]),
+  text: z.string(),
+  /** "interrupted" = the stream died mid-reply; the partial text was kept. */
+  status: z.enum(["complete", "interrupted"]),
+  createdAt: z.string(),
+});
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
+// ---------------------------------------------------------------------------
+// App state
+// ---------------------------------------------------------------------------
+
+/** GET /api/state and POST /api/reset response: everything the page needs to render. */
+export const AppStateSchema = z.object({
+  messages: z.array(ChatMessageSchema),
+});
+export type AppState = z.infer<typeof AppStateSchema>;
+
 /** Custom data parts streamed alongside the assistant's text. */
 export type AppDataParts = Record<string, never>;
 

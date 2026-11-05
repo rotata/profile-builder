@@ -4,15 +4,12 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { textOf } from "@/components/messages";
 import { type AppUIMessage, type ChatRequest, parseApiError } from "@/shared/contract";
 
 type ChatProps = {
   initialMessages: AppUIMessage[];
 };
-
-function textOf(message: AppUIMessage): string {
-  return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
-}
 
 // History is server-owned: send only the newest user message.
 const transport = new DefaultChatTransport<AppUIMessage>({
@@ -55,7 +52,7 @@ export function Chat({ initialMessages }: ChatProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="chat" data-status={status}>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-4" aria-live="polite">
         {messages.length === 0 && (
           <p className="text-sm text-black/50">

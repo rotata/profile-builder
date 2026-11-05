@@ -12,7 +12,7 @@ export async function send(page: Page, text: string) {
   await page.getByRole("textbox", { name: "Message" }).fill(text);
   await page.getByRole("button", { name: "Send" }).click();
   await expect(replies).toHaveCount(before + 1);
-  await expect(page.getByRole("textbox", { name: "Message" })).toBeEditable();
-  await expect(page.getByRole("button", { name: "Send" })).toBeDisabled(); // input cleared
+  // "ready" only after the server's finish event, which is sent post-persistence.
+  await expect(page.getByTestId("chat")).toHaveAttribute("data-status", "ready");
   return replies.last();
 }

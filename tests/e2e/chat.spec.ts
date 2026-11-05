@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { resetApp } from "./helpers";
+
+test.beforeEach(async ({ page }) => resetApp(page));
 
 test("assistant reply streams in incrementally", async ({ page }) => {
   await page.goto("/");
