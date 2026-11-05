@@ -23,6 +23,20 @@ describe("toApiError", () => {
     expect(toApiError(retry).code).toBe("llm_quota_exceeded");
   });
 
+  it("maps Gemini's invalid-key 400 to llm_auth_failed", () => {
+    const body = '{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}';
+    expect(toApiError(apiError(400, body)).code).toBe("llm_auth_failed");
+  });
+
+  it("treats a free-tier per-minute 429 as transient, a per-day one as quota", () => {
+    const perMinute =
+      '{"error":{"message":"You exceeded your current quota. Quota exceeded for metric: generate_content_free_tier_requests, limit: 10","details":[{"quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier"},{"retryDelay":"21s"}]}}';
+    const perDay =
+      '{"error":{"message":"You exceeded your current quota.","status":"RESOURCE_EXHAUSTED","details":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}}';
+    expect(toApiError(apiError(429, perMinute)).code).toBe("llm_unavailable");
+    expect(toApiError(apiError(429, perDay)).code).toBe("llm_quota_exceeded");
+  });
+
   it("maps 5xx to llm_unavailable", () => {
     expect(toApiError(apiError(503, "")).code).toBe("llm_unavailable");
   });

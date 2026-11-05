@@ -5,7 +5,7 @@ conversation. Replies stream token-by-token. Preferences are extracted into a ty
 are looked up with `getDestinationInfo`. A statement that contradicts the profile becomes a **conflict for the traveler to resolve**,
 never a silent overwrite.
 
-Next.js 16 · TypeScript · AI SDK 7 · OpenAI (configurable) · SQLite (`node:sqlite`) · zod · Vitest · Playwright
+Next.js 16 · TypeScript · AI SDK 7 · Gemini or OpenAI (configurable) · SQLite (`node:sqlite`) · zod · Vitest · Playwright
 
 ---
 
@@ -15,7 +15,7 @@ Requires **Node ≥ 22.13** (uses the built-in `node:sqlite`; tested on Node 24 
 
 ```bash
 npm install
-cp .env.example .env.local      # then set OPENAI_API_KEY in .env.local
+cp .env.example .env.local      # then set GOOGLE_GENERATIVE_AI_API_KEY (free: aistudio.google.com/apikey)
 npm run dev                     # http://localhost:3000
 ```
 
@@ -44,24 +44,32 @@ CI (`.github/workflows/ci.yml`) runs typecheck, lint, unit tests and E2E on ever
 
 | Env var | Default | |
 |---|---|---|
-| `LLM_PROVIDER` | `openai` | `openai` or `mock` |
-| `OPENAI_API_KEY` | – | Required for `openai`. Only ever in `.env.local` (gitignored); never logged |
-| `LLM_MODEL` | `gpt-4.1-mini` | Any OpenAI model with tool calling + structured outputs |
+| `LLM_PROVIDER` | `openai` | `google`, `openai` or `mock`. `.env.example` sets `google` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | – | Required for `google` |
+| `OPENAI_API_KEY` | – | Required for `openai` |
+| `LLM_MODEL` | per provider | `gemini-2.5-flash` / `gpt-4.1-mini`; any model with tool calling + structured outputs |
 | `DATABASE_PATH` | `data/profile.db` | Created on first run (gitignored) |
 
-**Why OpenAI `gpt-4.1-mini`:** the whole design leans on two capabilities, reliable tool calls (destinations) and strict structured
-outputs (extraction). A small OpenAI model does both well at low cost. Free OpenRouter models were the alternative; their
-tool-call reliability varies, which would show up directly as missed lookups and failed extractions. Swapping providers is a
-change in one file (`src/server/llm/provider.ts`).
+Keys live only in `.env.local` (gitignored) and are never logged.
+
+**Why Gemini 2.5 Flash (with OpenAI as a drop-in):** the design leans on two capabilities, reliable tool calls (destinations)
+and structured outputs (extraction). I started on OpenAI `gpt-4.1-mini`, and the first live run failed because the account was
+out of credits. That's how the `llm_quota_exceeded` handling below came about. Gemini 2.5 Flash has a free tier and solid
+tool calling and JSON-schema output, so a reviewer can run it at no cost. Free OpenRouter models were the other option, but
+their tool-call reliability varies, which would show up directly as missed lookups and failed extractions. **Trade-off:** the
+free tier allows only a few requests per minute, and each turn makes two calls (reply + extraction), so typing fast can hit
+the per-minute limit. The app reports that as a transient "wait a moment" error, not a failure. Providers are swapped in one
+file (`src/server/llm/provider.ts`).
 
 **Failure modes:**
 
 | Situation | What the user sees |
 |---|---|
 | Key missing / bad env | Chat returns `503 llm_not_configured`; banner names the env var. History and profile still load. |
-| Key rejected (401/403) | `llm_auth_failed` banner: "The API key was rejected" |
+| Key rejected (OpenAI 401/403, Gemini 400 "API key not valid") | `llm_auth_failed` banner: "The API key was rejected" |
+| Free-tier per-minute limit (Gemini 429 with a per-minute quota) | `llm_unavailable`: "wait a moment and try again" |
 | Model not found (404) | `llm_not_configured`: check `LLM_MODEL` |
-| Account out of credits (OpenAI 429 `insufficient_quota`) | `llm_quota_exceeded`: "add credits or switch provider". Kept separate from rate limits because retrying can't fix it |
+| Out of credits / daily quota (OpenAI `insufficient_quota`, Gemini per-day quota) | `llm_quota_exceeded`: "add credits, wait for reset, or switch provider". Kept separate from rate limits because retrying soon won't help |
 | Rate limit / 5xx / network | SDK retries (2×), then `llm_unavailable` with **Try again**. A turn that failed before any text is not saved, so retrying can't duplicate history |
 | Stream dies mid-reply | Partial reply kept, marked `interrupted`; extraction skipped for that turn |
 | Extraction fails / returns junk | Reply stands; profile untouched; small "couldn't update your profile" notice |

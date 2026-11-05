@@ -10,17 +10,33 @@ export function toApiError(error: unknown): ApiError {
 
   if (APICallError.isInstance(cause)) {
     const status = cause.statusCode;
-    if (status === 401 || status === 403) {
+    const detail = `${cause.responseBody ?? ""} ${cause.message}`;
+
+    // OpenAI: 401. Gemini: 400 "API key not valid" / 403.
+    if (status === 401 || status === 403 || (status === 400 && /api[ _-]?key not valid|API_KEY_INVALID/i.test(detail))) {
       return {
         code: "llm_auth_failed",
-        message: "The LLM provider rejected the API key. Check OPENAI_API_KEY in .env.local.",
+        message: "The LLM provider rejected the API key. Check the key in .env.local.",
       };
     }
-    // OpenAI signals "out of credits" as a 429 too; unlike a rate limit, retrying can't fix it.
-    if (status === 429 && /insufficient_quota|no credits|exceeded your current quota|billing/i.test(`${cause.responseBody ?? ""} ${cause.message}`)) {
+    if (status === 429) {
+      // Free tiers (e.g. Gemini) rate-limit per minute with a "quota" message — transient.
+      if (/PerMinute|per minute|retryDelay/i.test(detail) && !/PerDay|per day/i.test(detail)) {
+        return {
+          code: "llm_unavailable",
+          message: "Hit the provider's per-minute rate limit (free tiers allow only a few requests a minute). Wait a moment and try again.",
+        };
+      }
+      // Out of credits / daily quota — retrying soon won't help.
+      if (/insufficient_quota|no credits|exceeded your current quota|quota exceeded|billing|RESOURCE_EXHAUSTED/i.test(detail)) {
+        return {
+          code: "llm_quota_exceeded",
+          message: "The LLM provider account is out of credits or quota. Add credits, wait for the quota to reset, or switch provider/model in .env.local.",
+        };
+      }
       return {
-        code: "llm_quota_exceeded",
-        message: "The LLM provider account has no credits or quota left. Add credits, or switch provider/model in .env.local.",
+        code: "llm_unavailable",
+        message: "The LLM provider is rate-limiting requests. Please try again in a moment.",
       };
     }
     if (status === 404) {
@@ -29,7 +45,7 @@ export function toApiError(error: unknown): ApiError {
         message: "The configured model was not found. Check LLM_MODEL in .env.local.",
       };
     }
-    if (status === 429 || (status !== undefined && status >= 500) || cause.isRetryable) {
+    if ((status !== undefined && status >= 500) || cause.isRetryable) {
       return {
         code: "llm_unavailable",
         message: "The LLM provider is busy or unreachable. Please try again in a moment.",
