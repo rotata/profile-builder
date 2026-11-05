@@ -9,8 +9,14 @@ How this was built: tools, sessions, the decisions that mattered, and what I'd c
 
 | # | Tool | What happened | File |
 |---|---|---|---|
-| 1 | GitHub Copilot Chat (VS Code) | Earlier exploration (v0.1/v0.2 prototypes) and the *Travel Identity Agent Design Review v1.2.0* | `transcripts/01-copilot-chat.*` |
+| 1 | GitHub Copilot Chat (VS Code) | Earlier exploration (v0.1/v0.2 prototypes) and the *Travel Identity Agent Design Review v1.2.0* | **No raw transcript exists** (see below) |
 | 2 | Claude Code (VS Code) | Validated v1.2.0 against the brief → plan v1.3 (`docs/PLAN.md`) → built V0.1–V0.8 with tests → live verification and fixes | `transcripts/2026-11-04-210510-build-a-travel-planner.txt` |
+
+**Gap: session 1 has no raw transcript.** The raw GitHub Copilot Chat session for the early exploration doesn't exist, so it
+isn't included and hasn't been reconstructed. What survives from that session is its output: the v1.2.0 design review
+(`transcripts/Travel_Identity_Agent_Design_Review_v1.2.0.docx`), which this build started from. Highlight #1 describes how that
+plan was validated and revised. Nothing in the submitted code comes from session 1. This repo was built from scratch in
+session 2, which is fully transcribed.
 
 Spec files: `docs/PLAN.md` (v1.3, including the "Revisions during build" appendix). The superseded v1.2.0 review is in `transcripts/`.
 
