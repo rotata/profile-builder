@@ -154,6 +154,20 @@ The client sends only the new message. **History is server-owned**, so the clien
 - **SQLite via `node:sqlite`.** No ORM and no native addon to compile (better-sqlite3 can need a C++ toolchain on new Node
   versions, which breaks "runs in 5 minutes"). The profile is one JSON snapshot row, validated on read; a corrupt row degrades
   to empty and is logged, rather than crashing.
+- **One orchestrating model plus code, not a team of agents.** Each job in a turn goes to the cheapest component that does it
+  reliably:
+
+  | Job | Implemented as | Why not its own agent |
+  |---|---|---|
+  | Conversation + destination lookups | One streaming model with a tool loop | It's the only user-facing step, so it owns the stream |
+  | Extraction | A separate structured-output call | Already isolated, which is the useful part of an "agent" boundary, without extra round trips |
+  | `getDestinationInfo` | A tool (a function) | It's a lookup. An agent adds latency and a new way to invent facts |
+  | Conflict decisions | Pure code (`conflicts.ts`) | Must be deterministic, tested rule by rule, and auditable. The model spots semantic contradictions; code decides |
+  | Persistence | Plain data access | No judgment involved |
+
+  Agents-by-default would add model calls and agent-to-agent hops per turn (latency, cost), and make the most-scrutinized
+  behavior non-deterministic and harder to test (today E2E runs the same every time against a scripted model). The layering
+  (contract / domain / llm / transport) keeps the door open: see "With another day".
 - **A mock model that speaks the real protocol.** It makes real tool calls and composes its replies *from* the tool result, so E2E
   can assert that tool-only facts reach the reply. It proves wiring, not judgment; that's what `npm run eval` is for.
 
@@ -180,3 +194,11 @@ The client sends only the new message. **History is server-owned**, so the clien
   to fill a gap?").
 - Prompt caching for the static instructions, and a cheaper model for extraction (the role split already exists in
   `provider.ts`).
+- **Before any multi-agent work:** start extraction *in parallel* with the streamed reply instead of after it. It only needs
+  the new message and the previous reply, so the profile would update sooner and turns would finish faster.
+- **Multi-agent version, if scale or data sources justify it:** the conversation model becomes an orchestrator, and extraction
+  becomes a sub-agent that can ask for clarification instead of dropping ambiguous input. A background "profile reviewer"
+  periodically compresses long histories and checks the profile for consistency. A research agent only appears once there are
+  real, messy destination sources. `getDestinationInfo` stays a tool and `conflicts.ts` stays code. The change is mostly in
+  `turn.ts` and `provider.ts` (AI SDK 7 supports agents and sub-agents as tools); the contract, rules, storage and UI stay as they
+  are.

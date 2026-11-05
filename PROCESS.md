@@ -113,7 +113,21 @@ Spec files: `docs/PLAN.md` (v1.3, including the "Revisions during build" appendi
 - **Lesson:** the conflict *detection* was solid. The *conversation* around it was where the real model drifted, and the eval
   wasn't testing that until now.
 
-### 13. Tooling slip
+### 13. "Could each task run as its own agent?" — choosing not to, by default
+- **Trying to:** decide whether to re-architect the turn as cooperating agents (one per task).
+- **Got back:** a split by task:
+  - Conversation is already an agent (a model with a tool loop) and would become the orchestrator.
+  - Extraction is a natural sub-agent.
+  - `getDestinationInfo` should stay a tool: it's a lookup, and an agent adds latency and a new way to invent facts.
+  - Conflict decisions should stay code: deterministic, tested rule by rule, auditable.
+  - Persistence involves no judgment.
+- **Kept / changed:** kept the current design. The principle is "judgment in models, rules in code": the model spots semantic
+  contradictions, code decides what happens. Agents-by-default would add calls and hops per turn (latency, cost) and make
+  the most-scrutinized behavior non-deterministic and harder to test. Documented the multi-agent version as a "with another
+  day" path, and noted that a cheaper win comes first: running extraction in parallel with the streamed reply. Not
+  implemented, as a deliberate scope decision for the 2-hour budget.
+
+### 14. Tooling slip
 - A PowerShell one-liner used to edit a test file re-encoded it (an em dash became `â€”`, and a BOM was added). Caught in the diff
   notice; rewrote the file and stopped using shell commands for file edits.
 
