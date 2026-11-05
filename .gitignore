@@ -1,0 +1,28 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# local data (SQLite profile store)
+/data/
+
+# secrets — only .env.example is committed
+.env*
+!.env.example
+
+# test output
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/coverage/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.vercel
