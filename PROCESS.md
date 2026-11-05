@@ -9,18 +9,38 @@ How this was built: tools, sessions, the decisions that mattered, and what I'd c
 
 | # | Tool | What happened | File |
 |---|---|---|---|
-| 1 | GitHub Copilot Chat (VS Code) | Earlier exploration (v0.1/v0.2 prototypes) and the *Travel Identity Agent Design Review v1.2.0* | **No raw transcript exists** (see below) |
-| 2 | Claude Code (VS Code) | Validated v1.2.0 against the brief → plan v1.3 (`docs/PLAN.md`) → built V0.1–V0.8 with tests → live verification and fixes | `transcripts/2026-11-04-210510-build-a-travel-planner.txt` |
+| 1 | Copilot | Earlier exploration: production-first design → simplification → v0.1/v0.2 prototypes → *Travel Identity Agent Design Review v1.2.0* | `transcripts/Profile_Builder_CoPilot_Session_Export.md`: **reconstructed, not raw** (see below) |
+| 2 | Claude Code (VS Code) | Validated v1.2.0 against the brief → plan v1.3 (`docs/PLAN.md`) → built V0.1–V0.8 with tests → live verification and fixes | `transcripts/2026-11-04-210510-build-a-travel-planner.txt` (raw `/export`) |
 
-**Gap: session 1 has no raw transcript.** The raw GitHub Copilot Chat session for the early exploration doesn't exist, so it
-isn't included and hasn't been reconstructed. What survives from that session is its output: the v1.2.0 design review
-(`transcripts/Travel_Identity_Agent_Design_Review_v1.2.0.docx`), which this build started from. Highlight #1 describes how that
-plan was validated and revised. Nothing in the submitted code comes from session 1. This repo was built from scratch in
-session 2, which is fully transcribed.
+**Gap: session 1 has no raw transcript.** A raw export of the Copilot session doesn't exist. What's included instead is a
+*best-effort export that Copilot itself generated* at the end of the session, so read it as a reconstruction:
+- Most **assistant turns are paraphrased summaries** ("Generated M6 implementation files…"), not the actual replies.
+- Some of **my messages are abbreviated** with "…".
+- Hidden instructions and tool traces are not included.
+
+It's here because it's the only record of the decisions that led to the v1.2.0 design review
+(`transcripts/Travel_Identity_Agent_Design_Review_v1.2.0.docx`), which session 2 started from. **No submitted code comes from
+session 1.** This repo was built from scratch in session 2, which is a raw export.
 
 Spec files: `docs/PLAN.md` (v1.3, including the "Revisions during build" appendix). The superseded v1.2.0 review is in `transcripts/`.
 
 ## Annotated highlights
+
+**Session 1 (Copilot): before this build**
+
+### S1. "What is the need for Prisma here? … build locally before we push"
+*(Copilot export, ~line 538)*
+- **Trying to:** stop an over-engineered design before building it. By this point the session had designed Prisma
+  repositories, event-sourced profile history, SSE cross-tab sync, CI database isolation and URL-encoded SQLite paths, and
+  none of it had been compiled or run.
+- **Got back:** Prisma was convenient but not necessary for one user and three small tables.
+- **Kept / changed:** reset to *simplicity-first, local-first*: direct SQLite, two model calls, no SSE or timeline, and a hard
+  stop after the core loop works ("Step D"). That became the v1.2.0 design review. Session 2 kept this thesis and reversed one
+  part of it: "don't create the repo until Step D" (highlight #1), because the brief weights commit history.
+- **Also from session 1:** I declined `npm audit fix --force` before a working baseline existed, since it could pull in breaking
+  major upgrades (export ~lines 625, 667).
+
+**Session 2 (Claude Code): this build**
 
 ### 1. "Validate the plan and ask any questions on it"
 - **Trying to:** decide whether to build the existing v1.2.0 plan as-is.
@@ -56,6 +76,9 @@ Spec files: `docs/PLAN.md` (v1.3, including the "Revisions during build" appendi
 - **Got back:** create-next-app (Next 16) turned on `cacheComponents`. The bundled docs say GET route handlers that don't touch a
   Next "dynamic API" can then be **prerendered at build time**. Ours read SQLite synchronously, so a stale profile could be baked in.
 - **Kept / changed:** turned it off, with a comment explaining why. Also dropped Google Fonts so builds work offline.
+- **Thread from session 1:** the v0.2 prototype failed its production build on a Next.js prerender error, and still reported
+  "Cache Components / Partial Prefetching" after a config change (Copilot export, ~lines 685 and 739). Having lost time to
+  that setting once, I disabled it up front this time.
 
 ### 5. A race the reload test caught (V0.3)
 - **What happened:** the "conversation survives a reload" E2E failed. The SDK sends its `finish` chunk as soon as the model
