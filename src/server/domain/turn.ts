@@ -6,8 +6,9 @@ import { extractProfileUpdates } from "@/server/domain/extraction";
 import { describeError, toApiError } from "@/server/llm/errors";
 import { buildChatInstructions } from "@/server/llm/prompts";
 import { chatModel } from "@/server/llm/provider";
+import { createDestinationTool } from "@/server/llm/tools";
 import { log } from "@/server/log";
-import type { AppUIMessage, ChatMessage, TravelProfile, TurnResult } from "@/shared/contract";
+import type { AppUIMessage, ChatMessage, DestinationLookup, TravelProfile, TurnResult } from "@/shared/contract";
 
 type RunTurnInput = { userText: string; requestId: string };
 
@@ -39,6 +40,7 @@ export function runTurn({ userText, requestId }: RunTurnInput) {
     id: crypto.randomUUID(),
     role: "user",
     text: userText,
+    lookups: [],
     status: "complete",
     createdAt: new Date().toISOString(),
   };
@@ -49,11 +51,22 @@ export function runTurn({ userText, requestId }: RunTurnInput) {
       const startedAt = Date.now();
       let replyText = "";
       let streamFailed = false;
+      const lookups: DestinationLookup[] = [];
+
+      const getDestinationInfo = createDestinationTool({
+        requestId,
+        onLookup: (lookup) => {
+          lookups.push(lookup);
+          writer.write({ type: "data-lookup", id: `lookup-${lookups.length}`, data: lookup });
+        },
+      });
 
       const result = streamText({
         model: chatModel(),
         instructions: buildChatInstructions(profile),
         messages: [...history.map(toModelMessage), toModelMessage(userMessage)],
+        tools: { getDestinationInfo },
+        // Up to: tool call(s) → informed reply. Bounded so a looping model can't run away.
         stopWhen: isStepCount(3),
         onChunk: ({ chunk }) => {
           if (chunk.type === "text-delta") replyText += chunk.text;
@@ -93,7 +106,7 @@ export function runTurn({ userText, requestId }: RunTurnInput) {
 
       if (!replyText.trim()) return; // nothing worth keeping; client retries cleanly
 
-      persistTurn(userMessage, replyText, streamFailed);
+      persistTurn(userMessage, { text: replyText, lookups, interrupted: streamFailed });
 
       let turnResult: TurnResult = { profile, extraction: "skipped" };
       if (!streamFailed) {
@@ -106,14 +119,18 @@ export function runTurn({ userText, requestId }: RunTurnInput) {
   });
 }
 
-function persistTurn(userMessage: ChatMessage, replyText: string, interrupted: boolean) {
+function persistTurn(
+  userMessage: ChatMessage,
+  reply: { text: string; lookups: DestinationLookup[]; interrupted: boolean },
+) {
   transaction(() => {
     messagesRepo.insert(userMessage);
     messagesRepo.insert({
       id: crypto.randomUUID(),
       role: "assistant",
-      text: replyText,
-      status: interrupted ? "interrupted" : "complete",
+      text: reply.text,
+      lookups: reply.lookups,
+      status: reply.interrupted ? "interrupted" : "complete",
       createdAt: new Date().toISOString(),
     });
   });

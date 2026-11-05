@@ -108,11 +108,22 @@ export const ChatRequestSchema = z.object({
 });
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
+/** A getDestinationInfo call made while generating a reply (shown as a chip). */
+export const DestinationLookupSchema = z.object({
+  /** What the model asked for. */
+  query: z.string(),
+  /** Canonical name if found, else the query. */
+  name: z.string(),
+  found: z.boolean(),
+});
+export type DestinationLookup = z.infer<typeof DestinationLookupSchema>;
+
 /** A persisted chat message, as returned by GET /api/state. */
 export const ChatMessageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant"]),
   text: z.string(),
+  lookups: z.array(DestinationLookupSchema),
   /** "interrupted" = the stream died mid-reply; the partial text was kept. */
   status: z.enum(["complete", "interrupted"]),
   createdAt: z.string(),
@@ -145,6 +156,7 @@ export type TurnEvent = { phase: "extracting" } | { phase: "done"; result: TurnR
 /** Custom data parts streamed alongside the assistant's text (as `data-<key>`). */
 export type AppDataParts = {
   turn: TurnEvent;
+  lookup: DestinationLookup;
 };
 
 /** The message shape useChat works with (text parts + our data parts). */

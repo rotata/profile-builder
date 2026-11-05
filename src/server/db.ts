@@ -25,7 +25,8 @@ const SCHEMA = `
     text       TEXT NOT NULL,
     status     TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    seq        INTEGER NOT NULL
+    seq        INTEGER NOT NULL,
+    lookups_json TEXT NOT NULL DEFAULT '[]'
   );
   -- Single-user app: exactly one profile row (id = 1), stored as a JSON snapshot.
   CREATE TABLE IF NOT EXISTS profile (
@@ -45,8 +46,17 @@ export function getDb(): DatabaseSync {
   const db = new DatabaseSync(path);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec(SCHEMA);
+  migrate(db);
   globalForDb.__profileDb = db;
   return db;
+}
+
+/** Additive migrations for databases created by earlier versions. */
+function migrate(db: DatabaseSync) {
+  const columns = db.prepare("PRAGMA table_info(messages)").all() as Array<{ name: string }>;
+  if (!columns.some((c) => c.name === "lookups_json")) {
+    db.exec("ALTER TABLE messages ADD COLUMN lookups_json TEXT NOT NULL DEFAULT '[]'");
+  }
 }
 
 /** Test hook: drop the cached handle (e.g. after switching DATABASE_PATH). */
@@ -79,10 +89,16 @@ function warnCorrupt(table: string, detail: unknown) {
 export const messagesRepo = {
   list(): ChatMessage[] {
     const rows = getDb()
-      .prepare("SELECT id, role, text, status, created_at AS createdAt FROM messages ORDER BY seq")
-      .all();
-    return rows.flatMap((row) => {
-      const parsed = ChatMessageSchema.safeParse(row);
+      .prepare("SELECT id, role, text, status, created_at AS createdAt, lookups_json FROM messages ORDER BY seq")
+      .all() as Array<Record<string, unknown> & { lookups_json: string }>;
+    return rows.flatMap(({ lookups_json, ...row }) => {
+      let lookups: unknown;
+      try {
+        lookups = JSON.parse(lookups_json);
+      } catch {
+        lookups = undefined;
+      }
+      const parsed = ChatMessageSchema.safeParse({ ...row, lookups });
       if (parsed.success) return [parsed.data];
       warnCorrupt("messages", parsed.error.message);
       return [];
@@ -92,10 +108,10 @@ export const messagesRepo = {
   insert(message: ChatMessage) {
     getDb()
       .prepare(
-        `INSERT INTO messages (id, role, text, status, created_at, seq)
-         VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM messages))`,
+        `INSERT INTO messages (id, role, text, status, created_at, lookups_json, seq)
+         VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM messages))`,
       )
-      .run(message.id, message.role, message.text, message.status, message.createdAt);
+      .run(message.id, message.role, message.text, message.status, message.createdAt, JSON.stringify(message.lookups));
   },
 
   clear() {

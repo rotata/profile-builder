@@ -18,6 +18,7 @@ const msg = (id: string, role: "user" | "assistant", text: string) => ({
   id,
   role,
   text,
+  lookups: [],
   status: "complete" as const,
   createdAt: new Date().toISOString(),
 });
