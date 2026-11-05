@@ -13,6 +13,8 @@ import { getConfig } from "@/server/config";
 import {
   type ChatMessage,
   ChatMessageSchema,
+  type Conflict,
+  ConflictSchema,
   emptyProfile,
   type TravelProfile,
   TravelProfileSchema,
@@ -33,6 +35,18 @@ const SCHEMA = `
     id         INTEGER PRIMARY KEY CHECK (id = 1),
     data_json  TEXT NOT NULL,
     updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS conflicts (
+    id              TEXT PRIMARY KEY,
+    field           TEXT NOT NULL,
+    existing_field  TEXT NOT NULL,
+    existing_value  TEXT NOT NULL,
+    candidate_value TEXT NOT NULL,
+    evidence        TEXT NOT NULL,
+    reason          TEXT NOT NULL,
+    status          TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    resolved_at     TEXT
   );
 `;
 
@@ -149,5 +163,50 @@ export const profileRepo = {
 
   clear() {
     getDb().exec("DELETE FROM profile");
+  },
+};
+
+// ---------------------------------------------------------------------------
+// conflicts
+// ---------------------------------------------------------------------------
+
+const CONFLICT_COLUMNS = `id, field, existing_field AS existingField, existing_value AS existingValue,
+  candidate_value AS candidateValue, evidence, reason, status, created_at AS createdAt, resolved_at AS resolvedAt`;
+
+function parseConflicts(rows: unknown[]): Conflict[] {
+  return rows.flatMap((row) => {
+    const parsed = ConflictSchema.safeParse(row);
+    if (parsed.success) return [parsed.data];
+    warnCorrupt("conflicts", parsed.error.message);
+    return [];
+  });
+}
+
+export const conflictsRepo = {
+  listOpen(): Conflict[] {
+    return parseConflicts(
+      getDb().prepare(`SELECT ${CONFLICT_COLUMNS} FROM conflicts WHERE status = 'open' ORDER BY created_at`).all(),
+    );
+  },
+
+  get(id: string): Conflict | undefined {
+    return parseConflicts([getDb().prepare(`SELECT ${CONFLICT_COLUMNS} FROM conflicts WHERE id = ?`).get(id)].filter(Boolean))[0];
+  },
+
+  insert(c: Conflict) {
+    getDb()
+      .prepare(
+        `INSERT INTO conflicts (id, field, existing_field, existing_value, candidate_value, evidence, reason, status, created_at, resolved_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(c.id, c.field, c.existingField, c.existingValue, c.candidateValue, c.evidence, c.reason, c.status, c.createdAt, c.resolvedAt);
+  },
+
+  resolve(id: string, status: Exclude<Conflict["status"], "open">, resolvedAt: string) {
+    getDb().prepare("UPDATE conflicts SET status = ?, resolved_at = ? WHERE id = ? AND status = 'open'").run(status, resolvedAt, id);
+  },
+
+  clear() {
+    getDb().exec("DELETE FROM conflicts");
   },
 };

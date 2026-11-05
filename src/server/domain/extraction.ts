@@ -14,7 +14,13 @@ import { describeError } from "@/server/llm/errors";
 import { buildExtractionInstructions, buildExtractionPrompt } from "@/server/llm/prompts";
 import { extractionModel } from "@/server/llm/provider";
 import { log } from "@/server/log";
-import { FIELD_VALUE_SCHEMAS, isScalarField, PROFILE_FIELDS, type TravelProfile } from "@/shared/contract";
+import {
+  type Conflict,
+  FIELD_VALUE_SCHEMAS,
+  isScalarField,
+  PROFILE_FIELDS,
+  type TravelProfile,
+} from "@/shared/contract";
 
 /**
  * What the model returns. Shaped for OpenAI strict structured outputs: every
@@ -41,6 +47,14 @@ export const ExtractionResultSchema = z.object({
       reason: z.string().describe("One short sentence explaining the tension, addressed to the traveler."),
     }),
   ),
+  resolutions: z.array(
+    z.object({
+      conflictId: z.string(),
+      choice: z
+        .enum(["keep", "replace"])
+        .describe("keep = the old profile value still stands; replace = the new value wins."),
+    }),
+  ),
 });
 export type ExtractionResult = z.infer<typeof ExtractionResultSchema>;
 export type ProfileUpdate = ExtractionResult["updates"][number];
@@ -48,6 +62,7 @@ export type Contradiction = ExtractionResult["contradictions"][number];
 
 type ExtractInput = {
   profile: TravelProfile;
+  openConflicts: Conflict[];
   previousAssistantText: string | null;
   userText: string;
   requestId: string;
@@ -165,5 +180,6 @@ export function sanitizeExtraction(raw: ExtractionResult, userText: string): { r
     return false;
   });
 
-  return { result: { updates, contradictions }, dropped };
+  // Resolution ids are checked against the actual open conflicts in conflicts.ts.
+  return { result: { updates, contradictions, resolutions: raw.resolutions }, dropped };
 }

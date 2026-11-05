@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { type ExtractionResult, isGrounded, sanitizeExtraction } from "@/server/domain/extraction";
 
 const update = (u: Partial<ExtractionResult["updates"][number]>): ExtractionResult["updates"][number] => ({
@@ -8,6 +8,13 @@ const update = (u: Partial<ExtractionResult["updates"][number]>): ExtractionResu
   evidence: "I love food",
   explicitChange: false,
   ...u,
+});
+
+const extraction = (p: Partial<ExtractionResult>): ExtractionResult => ({
+  updates: [],
+  contradictions: [],
+  resolutions: [],
+  ...p,
 });
 
 describe("isGrounded", () => {
@@ -33,7 +40,7 @@ describe("sanitizeExtraction", () => {
 
   it("drops updates whose evidence is not in the traveler's message", () => {
     const { result, dropped } = sanitizeExtraction(
-      { updates: [update({ evidence: "I adore museums", value: "museums" })], contradictions: [] },
+      extraction({ updates: [update({ evidence: "I adore museums", value: "museums" })] }),
       userText,
     );
     expect(result.updates).toHaveLength(0);
@@ -42,7 +49,7 @@ describe("sanitizeExtraction", () => {
 
   it("drops enum values outside the allowed set", () => {
     const { result, dropped } = sanitizeExtraction(
-      { updates: [update({ field: "budgetTier", op: "set", value: "cheapish", evidence: "on a budget" })], contradictions: [] },
+      extraction({ updates: [update({ field: "budgetTier", op: "set", value: "cheapish", evidence: "on a budget" })] }),
       userText,
     );
     expect(result.updates).toHaveLength(0);
@@ -51,13 +58,12 @@ describe("sanitizeExtraction", () => {
 
   it("normalizes ops to the field kind", () => {
     const { result } = sanitizeExtraction(
-      {
+      extraction({
         updates: [
           update({ field: "budgetTier", op: "add", value: "budget", evidence: "on a budget" }),
           update({ field: "interests", op: "set", value: "food", evidence: "I love food" }),
         ],
-        contradictions: [],
-      },
+      }),
       userText,
     );
     expect(result.updates.map((u) => u.op)).toEqual(["set", "add"]);
@@ -65,12 +71,11 @@ describe("sanitizeExtraction", () => {
 
   it("drops ungrounded contradictions", () => {
     const { result } = sanitizeExtraction(
-      {
-        updates: [],
+      extraction({
         contradictions: [
           { field: "dietary", existingValue: "vegetarian", candidateValue: "", evidence: "steakhouse", reason: "x" },
         ],
-      },
+      }),
       userText,
     );
     expect(result.contradictions).toHaveLength(0);

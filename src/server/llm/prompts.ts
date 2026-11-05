@@ -2,7 +2,7 @@
  * Prompt text lives here so it can be reviewed (and diffed) as product copy,
  * separate from orchestration code.
  */
-import { isScalarField, PROFILE_FIELDS, type TravelProfile } from "@/shared/contract";
+import { type Conflict, isScalarField, PROFILE_FIELDS, type TravelProfile } from "@/shared/contract";
 
 /** The profile as the model should see it: values only, empty fields omitted. */
 export function compactProfile(profile: TravelProfile): Record<string, string | string[]> {
@@ -19,8 +19,21 @@ export function compactProfile(profile: TravelProfile): Record<string, string | 
   return out;
 }
 
-export function buildChatInstructions(profile: TravelProfile): string {
+function describeConflict(c: Conflict): string {
+  const change = c.candidateValue ? `change to "${c.candidateValue}"` : `remove "${c.existingValue}"`;
+  return `- ${c.existingField}: profile says "${c.existingValue}", but the traveler said "${c.evidence}" (would ${change}). ${c.reason}`;
+}
+
+export function buildChatInstructions(profile: TravelProfile, openConflicts: Conflict[]): string {
   const known = compactProfile(profile);
+  const conflictSection = openConflicts.length
+    ? [
+        "",
+        "OPEN CONFLICTS — the traveler said things that contradict their saved profile. The profile was NOT changed.",
+        "Before anything else, ask about the first one in one friendly sentence (e.g. \"Earlier you said you're vegetarian — has that changed, or is the steakhouse for someone else?\"). Don't assume either answer.",
+        ...openConflicts.map(describeConflict),
+      ]
+    : [];
   return [
     "You are Profile Builder, a friendly travel concierge whose job is to learn the traveler's durable travel preferences through conversation.",
     "",
@@ -39,6 +52,7 @@ export function buildChatInstructions(profile: TravelProfile): string {
     "",
     "What you already know (do not re-ask these):",
     Object.keys(known).length ? JSON.stringify(known) : "(nothing yet)",
+    ...conflictSection,
   ].join("\n");
 }
 
@@ -56,19 +70,34 @@ export function buildExtractionInstructions(): string {
     "- Ignore one-off trip logistics (specific dates, a single booking) unless stated as a general preference.",
     "- explicitChange = true ONLY when the traveler explicitly says an earlier preference changed or was wrong (\"actually\", \"not anymore\", \"I changed my mind\", \"I eat meat now\").",
     "- Contradictions: if the message IMPLIES something incompatible with a value already in the current profile, without explicitly changing it (e.g. profile has dietary \"vegetarian\" and the traveler asks for the best steakhouse), add a `contradictions` entry instead of an update. Use the existing value exactly as shown. candidateValue is what the field would become, or \"\" if the old value would simply be removed.",
+    "- Resolutions: <open_conflicts> lists contradictions the assistant asked about. If the traveler's message answers one, add a `resolutions` entry with its id: \"keep\" if the saved profile value still stands (e.g. \"the steakhouse is for my friend\"), \"replace\" if the new value wins (e.g. \"yes, I eat meat now\"). Otherwise leave it out.",
     "- If nothing durable was said, return empty arrays. Do not guess.",
   ].join("\n");
 }
 
 type ExtractionPromptInput = {
   profile: TravelProfile;
+  openConflicts: Conflict[];
   previousAssistantText: string | null;
   userText: string;
 };
 
-export function buildExtractionPrompt({ profile, previousAssistantText, userText }: ExtractionPromptInput): string {
+export function buildExtractionPrompt({
+  profile,
+  openConflicts,
+  previousAssistantText,
+  userText,
+}: ExtractionPromptInput): string {
+  const conflicts = openConflicts.map(({ id, existingField, existingValue, candidateValue, evidence }) => ({
+    id,
+    field: existingField,
+    existingValue,
+    candidateValue,
+    evidence,
+  }));
   return [
     `<current_profile>${JSON.stringify(compactProfile(profile))}</current_profile>`,
+    `<open_conflicts>${JSON.stringify(conflicts)}</open_conflicts>`,
     `<assistant_message>${previousAssistantText ?? ""}</assistant_message>`,
     `<traveler_message>${userText}</traveler_message>`,
   ].join("\n");

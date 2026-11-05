@@ -10,6 +10,9 @@
  *   a destination name        → real getDestinationInfo tool call, then a reply
  *                               composed from the tool result (Lisbon → no data)
  *   keywords (see KEYWORD_RULES) → scripted extraction
+ *   "steakhouse"              → contradiction against dietary "vegetarian"
+ *   open conflicts in prompt  → the reply asks about them
+ *   "for a friend" (with an open conflict) → resolves it as "keep"
  */
 import type { LanguageModelV4Prompt as Prompt, LanguageModelV4StreamPart as StreamPart } from "@ai-sdk/provider";
 import { simulateReadableStream } from "ai";
@@ -79,10 +82,22 @@ const KEYWORD_RULES: Array<{ pattern: RegExp; field: string; op: "set" | "add"; 
   { pattern: /\bboutique hotels?\b/i, field: "accommodation", op: "add", value: "boutique hotels" },
 ];
 
-export function scriptExtraction(prompt: string): { updates: MockUpdate[]; contradictions: MockContradiction[] } {
+type MockResolution = { conflictId: string; choice: "keep" | "replace" };
+
+export function scriptExtraction(prompt: string): {
+  updates: MockUpdate[];
+  contradictions: MockContradiction[];
+  resolutions: MockResolution[];
+} {
   const message = between(prompt, "traveler_message");
   const updates: MockUpdate[] = [];
   const contradictions: MockContradiction[] = [];
+  const resolutions: MockResolution[] = [];
+
+  const openConflicts = JSON.parse(between(prompt, "open_conflicts") || "[]") as Array<{ id: string }>;
+  if (openConflicts.length && /\b(for (a|my) friend|for someone else|still vegetarian)\b/i.test(message)) {
+    resolutions.push({ conflictId: openConflicts[0].id, choice: "keep" });
+  }
 
   const explicitMeat = /\b(i eat meat now|no longer vegetarian|not vegetarian anymore)\b/i.exec(message);
   if (explicitMeat) {
@@ -116,18 +131,16 @@ export function scriptExtraction(prompt: string): { updates: MockUpdate[]; contr
     });
   }
 
-  return { updates, contradictions };
+  return { updates, contradictions, resolutions };
 }
 
 export function createMockExtractionModel() {
   return new MockLanguageModelV4({
     modelId: "mock-extract",
     doGenerate: async ({ prompt }) => {
-      const promptText = prompt
-        .map((m) => (typeof m.content === "string" ? m.content : m.content.map((p) => ("text" in p ? p.text : "")).join("")))
-        .join("\n");
+      // Data lives in the user message; the system instructions merely *mention* the tags.
       return {
-        content: [{ type: "text", text: JSON.stringify(scriptExtraction(promptText)) }],
+        content: [{ type: "text", text: JSON.stringify(scriptExtraction(lastUserText(prompt))) }],
         finishReason: { unified: "stop", raw: undefined },
         usage: USAGE,
         warnings: [],
@@ -192,7 +205,15 @@ export function createMockChatModel() {
         ]);
       }
 
+      const system = prompt.find((m) => m.role === "system")?.content ?? "";
+      if (system.includes("OPEN CONFLICTS")) {
+        return streamOf([...textParts(MOCK_CONFLICT_QUESTION), finish()]);
+      }
+
       return streamOf([...textParts(scriptChatReply()), finish()]);
     },
   });
 }
+
+export const MOCK_CONFLICT_QUESTION =
+  "Quick check before we go on: something you said doesn't match your saved profile. Has that changed, or is it a one-off?";

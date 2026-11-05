@@ -2,15 +2,17 @@
 
 import { useState } from "react";
 import { Chat } from "@/components/Chat";
+import { ConflictCard } from "@/components/ConflictCard";
 import { toUIMessage } from "@/components/messages";
 import { ProfilePanel } from "@/components/ProfilePanel";
-import type { AppState, TurnEvent } from "@/shared/contract";
+import type { AppState, ProfileState, TurnEvent } from "@/shared/contract";
 
 type WorkspaceProps = { initialState: AppState };
 
-/** Client root: owns the profile state that the chat stream updates. */
+/** Client root: owns the profile/conflict state that the chat stream and conflict cards update. */
 export function Workspace({ initialState }: WorkspaceProps) {
   const [profile, setProfile] = useState(initialState.profile);
+  const [conflicts, setConflicts] = useState(initialState.conflicts);
   const [updating, setUpdating] = useState(false);
   const [extractionFailed, setExtractionFailed] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -22,7 +24,13 @@ export function Workspace({ initialState }: WorkspaceProps) {
     }
     setUpdating(false);
     setProfile(event.result.profile);
+    setConflicts(event.result.conflicts);
     setExtractionFailed(event.result.extraction === "failed");
+  }
+
+  function onResolved(state: ProfileState) {
+    setProfile(state.profile);
+    setConflicts(state.conflicts);
   }
 
   async function startOver() {
@@ -47,7 +55,10 @@ export function Workspace({ initialState }: WorkspaceProps) {
         </header>
         <Chat initialMessages={initialState.messages.map(toUIMessage)} onTurnEvent={onTurnEvent} />
       </section>
-      <aside className="flex-[2] overflow-y-auto rounded-xl border border-black/10 bg-white p-4">
+      <aside className="flex-[2] space-y-3 overflow-y-auto rounded-xl border border-black/10 bg-white p-4">
+        {conflicts.map((conflict) => (
+          <ConflictCard key={conflict.id} conflict={conflict} onResolved={onResolved} />
+        ))}
         <ProfilePanel profile={profile} updating={updating} extractionFailed={extractionFailed} />
       </aside>
     </main>

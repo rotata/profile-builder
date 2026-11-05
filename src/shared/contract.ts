@@ -99,6 +99,46 @@ export function emptyProfile(): TravelProfile {
 }
 
 // ---------------------------------------------------------------------------
+// Conflicts
+// ---------------------------------------------------------------------------
+
+/**
+ * A new statement that contradicts an existing profile value. The profile is
+ * NOT changed until the traveler resolves it (button or chat).
+ */
+export const ConflictSchema = z.object({
+  id: z.string(),
+  /** Field the candidate value would go into. */
+  field: z.enum(PROFILE_FIELDS),
+  /** Field holding the existing value — differs from `field` for cross-field
+   *  conflicts (e.g. liking something listed under dislikes). */
+  existingField: z.enum(PROFILE_FIELDS),
+  existingValue: z.string(),
+  /** "" means "the existing value would simply be removed". */
+  candidateValue: z.string(),
+  /** The traveler's words that triggered the conflict. */
+  evidence: z.string(),
+  reason: z.string(),
+  /** kept / replaced = resolved by the traveler; superseded = a later explicit statement settled it. */
+  status: z.enum(["open", "kept", "replaced", "superseded"]),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable(),
+});
+export type Conflict = z.infer<typeof ConflictSchema>;
+
+/** POST /api/conflicts/:id/resolve body. */
+export const ResolveConflictRequestSchema = z.object({ choice: z.enum(["keep", "replace"]) });
+export type ResolveConflictRequest = z.infer<typeof ResolveConflictRequestSchema>;
+
+/** POST /api/conflicts/:id/resolve response. */
+export const ProfileStateSchema = z.object({
+  profile: TravelProfileSchema,
+  /** Open conflicts only. */
+  conflicts: z.array(ConflictSchema),
+});
+export type ProfileState = z.infer<typeof ProfileStateSchema>;
+
+// ---------------------------------------------------------------------------
 // Chat
 // ---------------------------------------------------------------------------
 
@@ -138,6 +178,8 @@ export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export const AppStateSchema = z.object({
   messages: z.array(ChatMessageSchema),
   profile: TravelProfileSchema,
+  /** Open conflicts only. */
+  conflicts: z.array(ConflictSchema),
 });
 export type AppState = z.infer<typeof AppStateSchema>;
 
@@ -147,6 +189,8 @@ export type AppState = z.infer<typeof AppStateSchema>;
  */
 export const TurnResultSchema = z.object({
   profile: TravelProfileSchema,
+  /** Open conflicts after this turn. */
+  conflicts: z.array(ConflictSchema),
   extraction: z.enum(["applied", "no_changes", "failed", "skipped"]),
 });
 export type TurnResult = z.infer<typeof TurnResultSchema>;
