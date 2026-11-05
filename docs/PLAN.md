@@ -339,3 +339,22 @@ LLM-judged eval for the follow-up question's quality · ORM/migrations · cross-
 | Extraction flags false conflicts (annoys the user) | Explicit-change rule; conflicts are one click to dismiss with *Keep*; tracked in the eval. |
 | AI SDK API churn (major versions) | Pin exact versions; the mock relies only on the SDK's documented test utilities. |
 | `node:sqlite` is newer than better-sqlite3 | Wrapped behind `db.ts`; swapping drivers changes one file. |
+
+---
+
+## Appendix — Revisions during build
+
+Changes made while implementing, each with its reason (details in the commit messages and PROCESS.md):
+
+| Section | Plan said | Built | Why |
+|---|---|---|---|
+| §5 step 1 | Persist the user message first | User + assistant saved together at end of turn, only if the assistant produced text | A provider failure would otherwise leave a dangling user message, and retrying would duplicate it |
+| §5 step 8 | Write `data-turn`, close | SDK `finish` suppressed; our own `finish` sent after persisting | Reload E2E caught the SDK finish arriving before the turn was durable |
+| §3 | `destinationsOfInterest: {name, status}` | Plain names (wishlist only) | `visited` added little to follow-ups; cut for time |
+| §4 | `extraction: applied/no_changes/failed` | + `skipped` (interrupted stream) | Distinguishes "didn't try" from "tried and failed" |
+| §7/§8 | Resolution via chat "by the explicit-change rule" | Extractor also returns `resolutions` for open conflict ids | "It's for a friend" means *keep*, which no profile update expresses |
+| §8 | Conflict statuses open/kept/replaced | + `superseded` | A later explicit statement can settle a conflict without the card |
+| §8 | Dedupe by field + candidate | Dedupe by existingField/existing/field/candidate, and skip conflicts settled in the same message | Found by the "for a friend" E2E: resolving and re-raising in one message |
+| §2 | Next scaffold defaults | `cacheComponents` off | It can prerender GET handlers that read SQLite at build time |
+| §10 | 3 E2E flows | 12 E2E tests (shell, streaming, error, persistence ×2, profile ×2, destinations ×2, conflicts ×3) | Each checkpoint added its own; the suite still runs in under a minute |
+| §1 | Traits deferred | Cut | User chose to trim to 2h |
