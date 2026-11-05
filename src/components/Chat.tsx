@@ -5,10 +5,12 @@ import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { textOf } from "@/components/messages";
-import { type AppUIMessage, type ChatRequest, parseApiError } from "@/shared/contract";
+import { type AppUIMessage, type ChatRequest, parseApiError, type TurnEvent } from "@/shared/contract";
 
 type ChatProps = {
   initialMessages: AppUIMessage[];
+  /** End-of-turn events (profile extraction progress/result) from the stream. */
+  onTurnEvent: (event: TurnEvent) => void;
 };
 
 // History is server-owned: send only the newest user message.
@@ -21,11 +23,14 @@ const transport = new DefaultChatTransport<AppUIMessage>({
   },
 });
 
-export function Chat({ initialMessages }: ChatProps) {
+export function Chat({ initialMessages, onTurnEvent }: ChatProps) {
   const [input, setInput] = useState("");
   const { messages, sendMessage, status, error, clearError, setMessages } = useChat<AppUIMessage>({
     transport,
     messages: initialMessages,
+    onData: (part) => {
+      if (part.type === "data-turn") onTurnEvent(part.data);
+    },
   });
   const busy = status === "submitted" || status === "streaming";
   const bottomRef = useRef<HTMLDivElement>(null);

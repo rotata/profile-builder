@@ -49,6 +49,78 @@ export function scriptChatReply(): string {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Extraction: keyword rules standing in for the model's judgment.
+// ---------------------------------------------------------------------------
+
+type MockUpdate = { field: string; op: "set" | "add" | "remove"; value: string; evidence: string; explicitChange: boolean };
+type MockContradiction = { field: string; existingValue: string; candidateValue: string; evidence: string; reason: string };
+
+function between(text: string, tag: string): string {
+  return text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))?.[1] ?? "";
+}
+
+const KEYWORD_RULES: Array<{ pattern: RegExp; field: string; op: "set" | "add"; value: string }> = [
+  { pattern: /\bvegetarian\b/i, field: "dietary", op: "add", value: "vegetarian" },
+  { pattern: /\bvegan\b/i, field: "dietary", op: "add", value: "vegan" },
+  { pattern: /\bsolo\b/i, field: "companions", op: "set", value: "solo" },
+  { pattern: /\b(my|with) (partner|wife|husband)\b/i, field: "companions", op: "set", value: "partner" },
+  { pattern: /\bluxury\b/i, field: "budgetTier", op: "set", value: "luxury" },
+  { pattern: /\bmid-?range\b/i, field: "budgetTier", op: "set", value: "midRange" },
+  { pattern: /\b(on a budget|cheap|backpack)/i, field: "budgetTier", op: "set", value: "budget" },
+  { pattern: /\b(slow|relaxed)\b/i, field: "travelPace", op: "set", value: "relaxed" },
+  { pattern: /\bfood\b/i, field: "interests", op: "add", value: "food" },
+  { pattern: /\bhiking\b/i, field: "interests", op: "add", value: "hiking" },
+  { pattern: /\bmuseums?\b/i, field: "interests", op: "add", value: "museums" },
+  { pattern: /\bboutique hotels?\b/i, field: "accommodation", op: "add", value: "boutique hotels" },
+];
+
+export function scriptExtraction(prompt: string): { updates: MockUpdate[]; contradictions: MockContradiction[] } {
+  const message = between(prompt, "traveler_message");
+  const updates: MockUpdate[] = [];
+  const contradictions: MockContradiction[] = [];
+
+  const explicitMeat = /\b(i eat meat now|no longer vegetarian|not vegetarian anymore)\b/i.exec(message);
+  if (explicitMeat) {
+    updates.push({ field: "dietary", op: "remove", value: "vegetarian", evidence: explicitMeat[0], explicitChange: true });
+  } else {
+    for (const rule of KEYWORD_RULES) {
+      const match = rule.pattern.exec(message);
+      if (match) updates.push({ field: rule.field, op: rule.op, value: rule.value, evidence: match[0], explicitChange: false });
+    }
+  }
+
+  const steak = /\bsteakhouse\b/i.exec(message);
+  if (steak) {
+    contradictions.push({
+      field: "dietary",
+      existingValue: "vegetarian",
+      candidateValue: "",
+      evidence: steak[0],
+      reason: "You mentioned a steakhouse, but your profile says you're vegetarian.",
+    });
+  }
+
+  return { updates, contradictions };
+}
+
+export function createMockExtractionModel() {
+  return new MockLanguageModelV4({
+    modelId: "mock-extract",
+    doGenerate: async ({ prompt }) => {
+      const promptText = prompt
+        .map((m) => (typeof m.content === "string" ? m.content : m.content.map((p) => ("text" in p ? p.text : "")).join("")))
+        .join("\n");
+      return {
+        content: [{ type: "text", text: JSON.stringify(scriptExtraction(promptText)) }],
+        finishReason: { unified: "stop", raw: undefined },
+        usage: USAGE,
+        warnings: [],
+      };
+    },
+  });
+}
+
 export function createMockChatModel() {
   return new MockLanguageModelV4({
     modelId: "mock-chat",

@@ -3,13 +3,27 @@
 import { useState } from "react";
 import { Chat } from "@/components/Chat";
 import { toUIMessage } from "@/components/messages";
-import type { AppState } from "@/shared/contract";
+import { ProfilePanel } from "@/components/ProfilePanel";
+import type { AppState, TurnEvent } from "@/shared/contract";
 
 type WorkspaceProps = { initialState: AppState };
 
-/** Client root: owns the profile/conflict state that the chat stream updates. */
+/** Client root: owns the profile state that the chat stream updates. */
 export function Workspace({ initialState }: WorkspaceProps) {
+  const [profile, setProfile] = useState(initialState.profile);
+  const [updating, setUpdating] = useState(false);
+  const [extractionFailed, setExtractionFailed] = useState(false);
   const [resetting, setResetting] = useState(false);
+
+  function onTurnEvent(event: TurnEvent) {
+    if (event.phase === "extracting") {
+      setUpdating(true);
+      return;
+    }
+    setUpdating(false);
+    setProfile(event.result.profile);
+    setExtractionFailed(event.result.extraction === "failed");
+  }
 
   async function startOver() {
     setResetting(true);
@@ -31,11 +45,10 @@ export function Workspace({ initialState }: WorkspaceProps) {
             Start over
           </button>
         </header>
-        <Chat initialMessages={initialState.messages.map(toUIMessage)} />
+        <Chat initialMessages={initialState.messages.map(toUIMessage)} onTurnEvent={onTurnEvent} />
       </section>
-      <aside className="flex-[2] rounded-xl border border-black/10 bg-white p-4">
-        <h2 className="font-semibold">Your travel profile</h2>
-        <p className="text-sm text-black/60">Nothing learned yet.</p>
+      <aside className="flex-[2] overflow-y-auto rounded-xl border border-black/10 bg-white p-4">
+        <ProfilePanel profile={profile} updating={updating} extractionFailed={extractionFailed} />
       </aside>
     </main>
   );

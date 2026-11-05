@@ -10,7 +10,13 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { getConfig } from "@/server/config";
-import { type ChatMessage, ChatMessageSchema } from "@/shared/contract";
+import {
+  type ChatMessage,
+  ChatMessageSchema,
+  emptyProfile,
+  type TravelProfile,
+  TravelProfileSchema,
+} from "@/shared/contract";
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS messages (
@@ -20,6 +26,12 @@ const SCHEMA = `
     status     TEXT NOT NULL,
     created_at TEXT NOT NULL,
     seq        INTEGER NOT NULL
+  );
+  -- Single-user app: exactly one profile row (id = 1), stored as a JSON snapshot.
+  CREATE TABLE IF NOT EXISTS profile (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    data_json  TEXT NOT NULL,
+    updated_at TEXT NOT NULL
   );
 `;
 
@@ -88,5 +100,38 @@ export const messagesRepo = {
 
   clear() {
     getDb().exec("DELETE FROM messages");
+  },
+};
+
+// ---------------------------------------------------------------------------
+// profile
+// ---------------------------------------------------------------------------
+
+export const profileRepo = {
+  /** A corrupt snapshot degrades to an empty profile (logged), never a crash. */
+  get(): TravelProfile {
+    const row = getDb().prepare("SELECT data_json FROM profile WHERE id = 1").get() as { data_json: string } | undefined;
+    if (!row) return emptyProfile();
+    try {
+      const parsed = TravelProfileSchema.safeParse(JSON.parse(row.data_json));
+      if (parsed.success) return parsed.data;
+      warnCorrupt("profile", parsed.error.message);
+    } catch (error) {
+      warnCorrupt("profile", error);
+    }
+    return emptyProfile();
+  },
+
+  save(profile: TravelProfile) {
+    getDb()
+      .prepare(
+        `INSERT INTO profile (id, data_json, updated_at) VALUES (1, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at`,
+      )
+      .run(JSON.stringify(TravelProfileSchema.parse(profile)), new Date().toISOString());
+  },
+
+  clear() {
+    getDb().exec("DELETE FROM profile");
   },
 };

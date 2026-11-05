@@ -8,6 +8,97 @@ import { z } from "zod";
 import type { UIMessage } from "ai";
 
 // ---------------------------------------------------------------------------
+// Travel profile
+// ---------------------------------------------------------------------------
+
+export const SEASONS = ["spring", "summer", "fall", "winter"] as const;
+export const SeasonSchema = z.enum(SEASONS);
+export const BudgetTierSchema = z.enum(["budget", "midRange", "luxury"]);
+export const TravelPaceSchema = z.enum(["relaxed", "balanced", "packed"]);
+export const CompanionsSchema = z.enum(["solo", "partner", "family", "friends"]);
+export const TripLengthSchema = z.enum(["weekend", "oneWeek", "twoWeeks", "longer"]);
+
+const freeText = z.string().trim().min(1).max(80);
+
+/** Fields holding one value at a time — a new value can contradict the old one. */
+export const SCALAR_FIELDS = ["homeBase", "budgetTier", "travelPace", "companions", "tripLength", "accessibility"] as const;
+/** Fields holding a set of values. */
+export const LIST_FIELDS = [
+  "interests",
+  "dislikes",
+  "dietary",
+  "accommodation",
+  "preferredSeasons",
+  "destinationsOfInterest",
+] as const;
+export const PROFILE_FIELDS = [...SCALAR_FIELDS, ...LIST_FIELDS] as const;
+
+export type ScalarField = (typeof SCALAR_FIELDS)[number];
+export type ListField = (typeof LIST_FIELDS)[number];
+export type ProfileField = (typeof PROFILE_FIELDS)[number];
+
+/** Allowed values per field. Used to validate LLM output before it touches the profile. */
+export const FIELD_VALUE_SCHEMAS = {
+  homeBase: freeText,
+  budgetTier: BudgetTierSchema,
+  travelPace: TravelPaceSchema,
+  companions: CompanionsSchema,
+  tripLength: TripLengthSchema,
+  accessibility: freeText,
+  interests: freeText,
+  dislikes: freeText,
+  dietary: freeText,
+  accommodation: freeText,
+  preferredSeasons: SeasonSchema,
+  destinationsOfInterest: freeText,
+} satisfies Record<ProfileField, z.ZodType<string>>;
+
+export function isScalarField(field: ProfileField): field is ScalarField {
+  return (SCALAR_FIELDS as readonly string[]).includes(field);
+}
+
+/**
+ * Every value remembers the traveler's own words that produced it, so the UI
+ * can show *why* the assistant believes something and conflicts are explainable.
+ */
+const entry = <T extends z.ZodType<string>>(value: T) =>
+  z.object({ value, evidence: z.string(), updatedAt: z.string() });
+
+export const TravelProfileSchema = z.object({
+  homeBase: entry(FIELD_VALUE_SCHEMAS.homeBase).nullable(),
+  budgetTier: entry(BudgetTierSchema).nullable(),
+  travelPace: entry(TravelPaceSchema).nullable(),
+  companions: entry(CompanionsSchema).nullable(),
+  tripLength: entry(TripLengthSchema).nullable(),
+  accessibility: entry(FIELD_VALUE_SCHEMAS.accessibility).nullable(),
+  interests: z.array(entry(freeText)),
+  dislikes: z.array(entry(freeText)),
+  dietary: z.array(entry(freeText)),
+  accommodation: z.array(entry(freeText)),
+  preferredSeasons: z.array(entry(SeasonSchema)),
+  destinationsOfInterest: z.array(entry(freeText)),
+});
+export type TravelProfile = z.infer<typeof TravelProfileSchema>;
+export type ProfileEntry = { value: string; evidence: string; updatedAt: string };
+
+export function emptyProfile(): TravelProfile {
+  return {
+    homeBase: null,
+    budgetTier: null,
+    travelPace: null,
+    companions: null,
+    tripLength: null,
+    accessibility: null,
+    interests: [],
+    dislikes: [],
+    dietary: [],
+    accommodation: [],
+    preferredSeasons: [],
+    destinationsOfInterest: [],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Chat
 // ---------------------------------------------------------------------------
 
@@ -35,11 +126,26 @@ export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 /** GET /api/state and POST /api/reset response: everything the page needs to render. */
 export const AppStateSchema = z.object({
   messages: z.array(ChatMessageSchema),
+  profile: TravelProfileSchema,
 });
 export type AppState = z.infer<typeof AppStateSchema>;
 
-/** Custom data parts streamed alongside the assistant's text. */
-export type AppDataParts = Record<string, never>;
+/**
+ * Outcome of the post-reply extraction step, sent as the last event of the
+ * chat stream so the UI updates without a refetch (and without racing it).
+ */
+export const TurnResultSchema = z.object({
+  profile: TravelProfileSchema,
+  extraction: z.enum(["applied", "no_changes", "failed", "skipped"]),
+});
+export type TurnResult = z.infer<typeof TurnResultSchema>;
+
+export type TurnEvent = { phase: "extracting" } | { phase: "done"; result: TurnResult };
+
+/** Custom data parts streamed alongside the assistant's text (as `data-<key>`). */
+export type AppDataParts = {
+  turn: TurnEvent;
+};
 
 /** The message shape useChat works with (text parts + our data parts). */
 export type AppUIMessage = UIMessage<never, AppDataParts>;
